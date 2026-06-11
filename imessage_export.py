@@ -7,13 +7,14 @@ import re
 import sqlite3
 import subprocess
 import sys
+from collections import Counter
 from datetime import datetime, timezone
 
 DB_PATH = os.path.expanduser("~/Library/Messages/chat.db")
 MAC_EPOCH_OFFSET = 978307200  # seconds between 1970-01-01 and 2001-01-01
 
 
-# ── iMessage helpers ─────────────────────────────────────────────────────────
+# ── iMessage helpers ─────────────────────────────────────────────────────────────
 
 def open_db(path):
     if not os.path.exists(path):
@@ -151,7 +152,62 @@ def cmd_export(args):
             print(f"\n({len(messages)} messages)", file=sys.stderr)
 
 
-# ── Apple Notes helpers ───────────────────────────────────────────────────────
+def cmd_stats(args):
+    conn = open_db(DB_PATH)
+    matches = find_chat(conn, args.contact)
+
+    if not matches:
+        print(f"No conversation found matching: {args.contact}", file=sys.stderr)
+        sys.exit(1)
+    if len(matches) > 1:
+        print(f"Multiple matches for '{args.contact}':", file=sys.stderr)
+        for m in matches:
+            print(f"  {m['display_name'] or m['chat_identifier']}", file=sys.stderr)
+        sys.exit(1)
+
+    chat = matches[0]
+    contact_name = chat["display_name"] or chat["chat_identifier"]
+    rows = fetch_messages(conn, chat["ROWID"], since=args.since)
+    conn.close()
+
+    if not rows:
+        print("No messages found.")
+        return
+
+    total = len(rows)
+    from_me = sum(1 for r in rows if r["is_from_me"])
+    from_them = total - from_me
+    first_dt = mac_ts_to_dt(rows[0]["date"])
+    last_dt = mac_ts_to_dt(rows[-1]["date"])
+
+    dow = Counter(
+        mac_ts_to_dt(r["date"]).strftime("%a")
+        for r in rows
+        if mac_ts_to_dt(r["date"])
+    )
+    busiest_day = dow.most_common(1)[0][0] if dow else "N/A"
+
+    hour_counts = Counter(
+        mac_ts_to_dt(r["date"]).hour
+        for r in rows
+        if mac_ts_to_dt(r["date"])
+    )
+    busiest_hour = hour_counts.most_common(1)[0][0] if hour_counts else None
+    busiest_hour_str = f"{busiest_hour:02d}:00" if busiest_hour is not None else "N/A"
+
+    print(f"\nConversation: {contact_name}")
+    print("─" * 45)
+    print(f"  Total messages : {total:,}")
+    print(f"  From me        : {from_me:,} ({from_me * 100 // total}%)")
+    print(f"  From them      : {from_them:,} ({from_them * 100 // total}%)")
+    print(f"  First message  : {fmt_dt(first_dt)}")
+    print(f"  Last message   : {fmt_dt(last_dt)}")
+    print(f"  Busiest day    : {busiest_day}")
+    print(f"  Busiest hour   : {busiest_hour_str}")
+    print()
+
+
+# ── Apple Notes helpers ─────────────────────────────────────────────────────
 
 def run_applescript(script):
     result = subprocess.run(
@@ -283,6 +339,11 @@ def main():
     exp.add_argument("--since", metavar="YYYY-MM-DD", help="Only messages on or after this date")
     exp.add_argument("--output", metavar="FILE", help="Write to file instead of stdout")
 
+    # imessage stats
+    stat = sub.add_parser("stats", help="Show statistics for a conversation")
+    stat.add_argument("contact", help="Contact name or phone number (partial match)")
+    stat.add_argument("--since", metavar="YYYY-MM-DD", help="Only count messages on or after this date")
+
     # notes
     notes = sub.add_parser("notes", help="Export Apple Notes")
     notes_sub = notes.add_subparsers(dest="notes_command", required=True)
@@ -301,6 +362,8 @@ def main():
         cmd_list(args)
     elif args.command == "export":
         cmd_export(args)
+    elif args.command == "stats":
+        cmd_stats(args)
     elif args.command == "notes":
         if args.notes_command == "list":
             cmd_notes_list(args)
