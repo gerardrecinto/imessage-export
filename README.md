@@ -1,12 +1,14 @@
 # imessage-export
 
-Export iMessage conversations and Apple Notes from macOS. No subscriptions, no apps, no phone connection.
-
-Reads `~/Library/Messages/chat.db` directly for iMessages and uses the Notes app API for Apple Notes.
-
+![CI](https://github.com/gerardrecinto/imessage-export/actions/workflows/ci.yml/badge.svg)
+![Release](https://github.com/gerardrecinto/imessage-export/actions/workflows/release.yml/badge.svg)
 ![Python](https://img.shields.io/badge/Python-3.9%2B-blue?logo=python&logoColor=white)
 ![macOS](https://img.shields.io/badge/macOS-12%2B-lightgrey?logo=apple)
 ![License](https://img.shields.io/badge/License-MIT-lightgrey)
+
+Export iMessage conversations and Apple Notes from macOS. No subscriptions, no apps, no phone connection.
+
+Reads `~/Library/Messages/chat.db` directly for iMessages and uses the Notes app API for Apple Notes.
 
 ---
 
@@ -93,6 +95,25 @@ python imessage_export.py notes export --folder "Work" --output ./work-notes/
 
 # Write to a file
 python imessage_export.py notes export "Meeting Notes" --output notes.txt
+```
+
+### Stats
+
+```bash
+# Message counts, date range, busiest day, and busiest hour for a conversation
+python imessage_export.py stats "John"
+```
+
+Example output:
+
+```
+stats: John
+  total messages:  1,842
+  sent:            934
+  received:        908
+  date range:      2021-03-14 — 2024-06-01
+  busiest day:     2023-07-04  (47 messages)
+  busiest hour:    8pm  (avg 12.3 messages/day)
 ```
 
 ---
